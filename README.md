@@ -6,13 +6,8 @@
 This repository provides the official PyTorch implementation of the following paper:
 
 > Gradient domain model driven algorithm unfolding network for blind image deblurring
->
 > 
->
-> In arXiv 2024. 
->
-> Paper:
->
+> This paper has been submitted to ‘Neural Network’ and is currently under review...
 
 ---
 
