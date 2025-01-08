@@ -29,12 +29,10 @@ class Gradient_Net(nn.Module):
             self.weight_x.size()[2] // 2, self.weight_x.size()[2] // 2, self.weight_x.size()[2] // 2,
             self.weight_x.size()[2] // 2),
                     mode='reflect')
-        # 水平梯度
         grad_x_r = F.conv2d(x_0, self.weight_x / self.ratio, stride=1, padding=0)
         grad_x_g = F.conv2d(x_1, self.weight_x / self.ratio, stride=1, padding=0)
         grad_x_b = F.conv2d(x_2, self.weight_x / self.ratio, stride=1, padding=0)
         grad_x = torch.cat([grad_x_r, grad_x_g, grad_x_b], 1)
-        # 垂直梯度
         grad_y_r = F.conv2d(x_0, self.weight_y / self.ratio, stride=1, padding=0)
         grad_y_g = F.conv2d(x_1, self.weight_y / self.ratio, stride=1, padding=0)
         grad_y_b = F.conv2d(x_2, self.weight_y / self.ratio, stride=1, padding=0)
@@ -43,10 +41,8 @@ class Gradient_Net(nn.Module):
 
 
 class Gradient_Net_transpose(nn.Module):
-    # 梯度转置算子
     def __init__(self, ratio):
         super(Gradient_Net_transpose, self).__init__()
-        # Sobel算子
         self.ratio = ratio
         kernel_x = [[-1., 0., 1.], [-2., 0., 2.], [-1., 0., 1.]]
         kernel_x = torch.FloatTensor(kernel_x).unsqueeze(0).unsqueeze(0)
@@ -56,51 +52,41 @@ class Gradient_Net_transpose(nn.Module):
         self.weight_y = nn.Parameter(data=kernel_y, requires_grad=False)
 
     def forward(self, x, xORy):
-
         if xORy == 'x':
-            # 水平梯度
             grad_x_r_T = F.conv_transpose2d(x[:, 0, :, :].unsqueeze(1), self.weight_x / self.ratio, stride=1, padding=1)
             grad_x_g_T = F.conv_transpose2d(x[:, 1, :, :].unsqueeze(1), self.weight_x / self.ratio, stride=1, padding=1)
             grad_x_b_T = F.conv_transpose2d(x[:, 2, :, :].unsqueeze(1), self.weight_x / self.ratio, stride=1, padding=1)
             grad_T = torch.cat([grad_x_r_T, grad_x_g_T, grad_x_b_T], 1)
         else:
-            # 垂直梯度
             grad_y_r_T = F.conv_transpose2d(x[:, 0, :, :].unsqueeze(1), self.weight_y / self.ratio, stride=1, padding=1)
             grad_y_g_T = F.conv_transpose2d(x[:, 1, :, :].unsqueeze(1), self.weight_y / self.ratio, stride=1, padding=1)
             grad_y_b_T = F.conv_transpose2d(x[:, 2, :, :].unsqueeze(1), self.weight_y / self.ratio, stride=1, padding=1)
             grad_T = torch.cat([grad_y_r_T, grad_y_g_T, grad_y_b_T], 1)
-
         return grad_T
 
 
 class GPMNet(nn.Module):
-    # 梯度细化网络
     def __init__(self, out_channel, num_heads_m, window_size_m, window_size_m_fft, window_sizex_m):
         super(GPMNet, self).__init__()
         self.module = nn.Sequential(
             WNAFBlock_ffc3_gelu_sin_2block(out_channel, num_heads_m, window_size_m, window_size_m_fft, window_sizex_m),
             WNAFBlock_ffc3_gelu_sin_2block(out_channel, num_heads_m, window_size_m, window_size_m_fft, window_sizex_m),
         )
-
     def forward(self, x):
         return self.module(x)
 
 
 class ImageFeatureGuideNet(nn.Module):
-    # 图像特征核映射
     def __init__(self):
         super(ImageFeatureGuideNet, self).__init__()
         self.up = nn.PixelShuffle(2)
-
         self.gap = nn.AdaptiveAvgPool2d((1, 1))
-        # 两个全连接层(Fex操作)
         self.fc = nn.Sequential(
             nn.Linear(128, 128 // 16, bias=False),  # 从 c -> c/r
             nn.ReLU(),
             nn.Linear(128 // 16, 128, bias=False),  # 从 c/r -> c
             nn.Sigmoid()
         )
-
         self.module = nn.Sequential(
             nn.Conv2d(128, 64, kernel_size=2, padding=0),
             nn.LeakyReLU(inplace=True),
@@ -108,7 +94,6 @@ class ImageFeatureGuideNet(nn.Module):
             nn.LeakyReLU(inplace=True),
             nn.Conv2d(32, 1, kernel_size=3, padding=1)
         )
-
     def forward(self, x):
         x = self.up(x)
         b, c, h, w = x.size()
@@ -120,12 +105,10 @@ class ImageFeatureGuideNet(nn.Module):
 
 def saveimg(img, name, cmap):
     from torchvision import utils
-    # 使用utils.save_image保存灰度图像
     utils.save_image(img, name, nrow=1, normalize=True, range=(0, 1), cmap=cmap)
 
 
 class BasicLayer(torch.nn.Module):
-    # 完成一次迭代更新
     def __init__(self, n_feats=32, num_heads_m=16, window_size_m=8, window_size_m_fft=-1, window_sizex_m=8):
         super(BasicLayer, self).__init__()
 
@@ -174,13 +157,11 @@ class BasicLayer(torch.nn.Module):
         self.IBFG = ImageFeatureGuideNet()
 
     def forward(self, u_k_1, u0_init, h_k_1):
-        B = u_k_1.size()[0]  # 图片数
-        # 前一次的预测u_k-1
+        B = u_k_1.size()[0]  
         u_pred_k_1 = u_k_1
-        # 对每张图和每个模糊核分别执行IGFM IPGD IPMM KPGD KPMM模块
         h_pred_k = []
         u_input_k = []
-        # 先图像后模糊核
+
         # IGFM + IPGD
         for i in range(B):
             u0 = torch.unsqueeze(u0_init[i, :, :, :], dim=0)
@@ -230,7 +211,6 @@ class BasicLayer(torch.nn.Module):
         u_pred = u_output_k + u_input_k
 
         # KPGD + KPMM
-        # u_k 旋转180°得到 u_k(-x,-y)
         u_rotate_k_1 = torch.rot90(torch.rot90(u_pred, dims=(2, 3)), dims=(2, 3))
         for i in range(B):
             I_mid_features = torch.unsqueeze(mid_features[i, :, :, :], dim=0)
@@ -239,11 +219,9 @@ class BasicLayer(torch.nn.Module):
             u_rotate = torch.unsqueeze(u_rotate_k_1[i, :, :, :], dim=0)
             u_pred1_nopad = torch.unsqueeze(u_pred[i, :, :, :], dim=0)
             #################################################################################
-            # KGDN 模糊核梯度下降模块
             u_pred1 = F.pad(input=u_pred1_nopad,
                             pad=(h.size()[2] // 2, h.size()[2] // 2, h.size()[2] // 2, h.size()[2] // 2),
                             mode='reflect')
-            # 0 1 2 对应 R G B通道分开卷积
             h2_0 = F.conv2d(u_pred1[0, 0, :, :].expand(1, 1, u_pred1.size()[2], u_pred1.size()[3]), h, padding=0) - \
                    u0[0, 0, :, :].expand(1, 1, u0.size()[2], u0.size()[3])
             h2_1 = F.conv2d(u_pred1[0, 1, :, :].expand(1, 1, u_pred1.size()[2], u_pred1.size()[3]), h, padding=0) - \
@@ -259,17 +237,14 @@ class BasicLayer(torch.nn.Module):
             h3_0 = F.conv2d(h2_0, u_rotate[0, 0, :, :].expand(1, 1, u_rotate.size()[2], u_rotate.size()[3]), padding=0)
             h3_1 = F.conv2d(h2_1, u_rotate[0, 1, :, :].expand(1, 1, u_rotate.size()[2], u_rotate.size()[3]), padding=0)
             h3_2 = F.conv2d(h2_2, u_rotate[0, 2, :, :].expand(1, 1, u_rotate.size()[2], u_rotate.size()[3]), padding=0)
-            # 将三个方向的梯度相加，然后下降， self.lambda_step_h即原文中的参数 u_k
             # KPGD
             h_input = h - self.lambda_step_h * (h3_0 + h3_1 + h3_2)
             #################################################################################
-            # KPMM 模糊核近端隐射模块
             h_if, s = self.IBFG(I_mid_features)
             h_forward = self.orb1(self.conv1_forward_h(h_input))
             h_backward = self.conv4_backward_h(
                 self.orb2(torch.mul(torch.sign(h_forward), F.relu(torch.abs(h_forward) - self.soft_thr_h))))
             h_pred = self.conv11_kernel_balance(torch.cat([h_backward, h_input, h_if], dim=1))
-            # 负值置0并且归一化
             h_pred = F.relu(h_pred) + 1e-8
             h_pred = h_pred / torch.sum(h_pred)
             if i == 0:
