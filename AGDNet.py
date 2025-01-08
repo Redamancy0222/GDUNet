@@ -6,10 +6,8 @@ from basicsr.models.archs.FNAFNet_arch import *
 
 
 class Gradient_Net(nn.Module):
-    # 梯度算子
     def __init__(self, ratio):
         super(Gradient_Net, self).__init__()
-        # Sobel算子
         self.ratio = ratio
         kernel_x = [[-1., 0., 1.], [-2., 0., 2.], [-1., 0., 1.]]
         kernel_x = torch.FloatTensor(kernel_x).unsqueeze(0).unsqueeze(0)
