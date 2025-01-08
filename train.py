@@ -57,7 +57,6 @@ learning_rate = args.learning_rate
 layer_num = args.layer_num
 setup_seed(args.seed)
 
-# 设置初始化模糊核为全1张量
 h_input = np.ones((args.kernel_size, args.kernel_size), dtype=np.float64) / float(args.kernel_size) / float(
     args.kernel_size)
 h_input = torch.FloatTensor(h_input).expand(1, 1, args.kernel_size, args.kernel_size).cuda()
@@ -65,7 +64,6 @@ h_ = h_input
 for i in range(args.batch_size - 1):
     h_input = torch.cat([h_input, h_], dim=0)
 
-# 数据集位置
 # RealSR_dataset
 # file_name1_train = 'E:/guozheng_deblur/MGSTNet/Dataset/RealSR_dataset/train/blur/'
 # file_name2_train = 'E:/guozheng_deblur/MGSTNet/Dataset/RealSR_dataset/train/sharp/'
@@ -141,11 +139,11 @@ exp_lr_scheduler = lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=50, T
 my_lr_scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=10, after_scheduler=exp_lr_scheduler)
 writer = SummaryWriter(
     "../%s/%s_layer_%d_lr_%f_%s" % (args.model_dir, args.net_name, layer_num, learning_rate, args.dataset))
-# 继续训练
+
 if start_epoch > 0:  # train stop and restart
     for i in range(start_epoch):
         optimizer.zero_grad()
-        optimizer.step()  # 更新参数
+        optimizer.step()  
         my_lr_scheduler.step()
     pre_model_dir = model_dir
     checkpoint = torch.load('./%s/net_params_%d.pkl' % (pre_model_dir, start_epoch % 100 - 1))
@@ -154,7 +152,6 @@ if start_epoch > 0:  # train stop and restart
 
 
 def saveimg(img, name, cmap):
-    # 使用utils.save_image保存灰度图像 gray/rgb
     torchvision.utils.save_image(img, name)  # range=(0, 1),
 
 
@@ -246,7 +243,6 @@ if __name__ == '__main__':
                 y = y.to(device)
                 h_input = h_input.to(device)
                 [x_output, h_output, u_all, h_all] = model(batch_x, batch_x, h_input)
-                # 3个阶段，cat前两个阶段所需的标签
                 batch_y = y
                 for n in range(1):
                     batch_y = torch.cat([batch_y, y], dim=0)
@@ -283,7 +279,6 @@ if __name__ == '__main__':
                     optimizer.step()  # 更新参数
                     optimizer.zero_grad()  # 梯度清零
                 # optimizer.step()
-            # 最后一个不足16的batch的梯度更新
             optimizer.step()  # 更新参数
             optimizer.zero_grad()  # 梯度清零
 
